@@ -374,24 +374,24 @@ const TL={a:'🩷 아름',h:'💙 형민',co:'💑 함께'};
 const TAC={a:'var(--a)',h:'var(--h)',co:'var(--co)'};
 
 function selectWho(w){
-  WHO=w;try{localStorage.setItem('fam_who',w);}catch(e){}
-  const info={a:{n:'아름',e:'👩'},h:{n:'형민',e:'👨'}}[w];
-  document.getElementById('who-emoji').textContent=info.e;
-  document.getElementById('who-name').textContent=info.n;
-  document.getElementById('who-display').style.display='';
-  _stype=w;show('sc-main');document.getElementById('fab-btn').style.display='';
-  initCal();
+  WHO=w;try{localStorage.setItem("fam_who",w);}catch(e){}
+  const info={a:{n:"아름",e:"👩"},h:{n:"형민",e:"👨"}}[w];
+  document.getElementById("who-emoji").textContent=info.e;
+  document.getElementById("who-name").textContent=info.n;
+  document.getElementById("who-display").style.display="";
+  _stype=w;show("sc-main");document.getElementById("fab-btn").style.display="";
+  initCal();buildTT();buildPickup();renderCal();renderUpcoming();
   if(DB){
-    DB.ref(GB_PATH).on('value',snap=>{
+    DB.ref(GB_PATH).on("value",snap=>{
       const v=snap.val();
-      if(v){GSCHED={};for(let d=0;d<5;d++)GSCHED[d]=v[d]?Object.values(v[d]):[];}
+      if(v){GSCHED={};for(let d=0;d<5;d++)GSCHED[d]=v[d]?Object.values(v[d]):[]; }
       else GSCHED=JSON.parse(JSON.stringify(DEF_SCH));
       buildTT();buildPickup();renderBlkList();
-    });
-    DB.ref(EV_PATH).on('value',snap=>{
+    },err=>console.warn("가빈 DB:",err));
+    DB.ref(EV_PATH).on("value",snap=>{
       EVENTS=snap.val()||{};renderCal();renderUpcoming();if(_sd)renderDay(_sd);
-    });
-  }else{buildTT();buildPickup();renderCal();}
+    },err=>console.warn("일정 DB:",err));
+  }
 }
 
 function switchWho(){
