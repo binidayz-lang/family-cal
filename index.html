@@ -53,13 +53,16 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--t);m
 .cal-nav{background:none;border:1px solid var(--bd);border-radius:8px;width:30px;height:30px;cursor:pointer;font-size:16px;color:var(--m);display:flex;align-items:center;justify-content:center}
 .cal-dow{display:grid;grid-template-columns:repeat(7,1fr);text-align:center;font-size:10px;color:var(--m);font-weight:700;margin-bottom:4px}
 .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
-.cal-cell{aspect-ratio:1;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;cursor:pointer;transition:.15s;position:relative}
+.cal-cell{aspect-ratio:1;border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;font-size:11px;cursor:pointer;transition:.15s;position:relative;overflow:hidden}
 .cal-cell:active{transform:scale(.92)}
 .cal-cell.other{color:var(--bd)}
+.shift-tag{font-size:8.5px;font-weight:900;line-height:1;letter-spacing:-0.3px}
+.cal-cell.other .shift-tag{opacity:.4}
 .cal-cell.today{background:#FDF0F3;font-weight:900;color:var(--a)}
-.cal-cell.has-ev::after{content:'';position:absolute;bottom:3px;width:4px;height:4px;border-radius:50%;background:var(--a)}
 .cal-cell.selected{background:var(--t);color:#fff;font-weight:900}
-.cal-cell.selected::after{background:#fff}
+.ev-dots{display:flex;gap:2px;justify-content:center;margin-top:1px;min-height:6px}
+.ev-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.cal-cell.selected .ev-dot{opacity:.7}
 .day-panel{margin:8px 12px 0;background:var(--w);border-radius:var(--r);padding:14px;box-shadow:var(--sh);display:none}
 .day-panel.open{display:block}
 .day-panel-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
@@ -278,6 +281,7 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--t);m
   <div class="modal">
     <div class="modal-title" id="modal-title">일정 추가</div>
     <div class="form-row"><label class="form-label">날짜</label><input type="date" class="form-input" id="ev-date"></div>
+    <div class="form-row"><label class="form-label">종료 날짜 <span style="font-weight:400;color:var(--m);font-size:10px">(며칠이면 입력)</span></label><input type="date" class="form-input" id="ev-edate"></div>
     <div class="form-row"><label class="form-label">제목</label><input type="text" class="form-input" id="ev-title" placeholder="일정 제목"></div>
     <div class="form-row">
       <label class="form-label">종류</label>
@@ -373,6 +377,29 @@ const TC={school:'var(--school)',neulbom:'var(--neulbom)',taekwondo:'var(--taekw
 const TL={a:'🩷 아름',h:'💙 형민',co:'💑 함께'};
 const TAC={a:'var(--a)',h:'var(--h)',co:'var(--co)'};
 
+// ═══ 형민 교대근무 ═══
+const SHIFT_BASE=new Date('2026-05-06');
+const SHIFT_PAT=['주','주','야','야','비','휴'];
+const SHIFT_CLR={주:'#F59E0B',야:'#6366F1',비:'#10B981',휴:'#EC4899'};
+function getShift(ds){
+  const d=new Date(ds);
+  const diff=Math.round((d-SHIFT_BASE)/(864e5));
+  return SHIFT_PAT[((diff%6)+6)%6];
+}
+
+// ═══ 셀 이벤트 메타 ═══
+function getCellMeta(ds){
+  const evs=Object.values(EVENTS);
+  const dots=[],bars=[];
+  evs.forEach(e=>{
+    const end=e.endDate||e.date;
+    if(ds<e.date||ds>end)return;
+    if(!e.endDate||e.endDate===e.date){dots.push(e);}
+    else{const pos=ds===e.date?'s':ds===end?'e':'m';bars.push({color:TAC[e.type]||'var(--a)',pos});}
+  });
+  return{dots,bars};
+}
+
 function selectWho(w){
   WHO=w;try{localStorage.setItem("fam_who",w);}catch(e){}
   const info={a:{n:"아름",e:"👩"},h:{n:"형민",e:"👨"}}[w];
@@ -416,13 +443,36 @@ function renderCal(){
   document.getElementById('cal-month-lbl').textContent=`${_cy}년 ${_cm+1}월`;
   const first=new Date(_cy,_cm,1).getDay(),days=new Date(_cy,_cm+1,0).getDate(),prev=new Date(_cy,_cm,0).getDate();
   let h='';
-  for(let i=0;i<first;i++){const pd=prev-first+1+i;h+=`<div class="cal-cell other">${pd}</div>`;}
+  for(let i=0;i<first;i++){
+    const pd=prev-first+1+i;
+    const pm=_cm-1<0?11:_cm-1,py=_cm-1<0?_cy-1:_cy;
+    const pds=`${py}-${Sp(pm+1)}-${Sp(pd)}`;
+    const sh=getShift(pds);
+    h+=`<div class="cal-cell other"><span class="shift-tag" style="color:${SHIFT_CLR[sh]}">${sh}</span><span>${pd}</span></div>`;
+  }
   for(let d=1;d<=days;d++){
     const ds=`${_cy}-${Sp(_cm+1)}-${Sp(d)}`;
-    const cls=['cal-cell',ds===td?'today':'',Object.values(EVENTS).some(e=>e.date===ds)?'has-ev':'',ds===_sd?'selected':''].join(' ').trim();
-    h+=`<div class="${cls}" onclick="pickDay('${ds}')">${d}</div>`;
+    const cls=['cal-cell',ds===td?'today':'',ds===_sd?'selected':''].join(' ').trim();
+    const sh=getShift(ds);
+    const{dots,bars}=getCellMeta(ds);
+    let evHTML='';
+    if(dots.length){
+      evHTML+=`<div class="ev-dots">${dots.slice(0,3).map(dot=>`<div class="ev-dot" style="background:${TAC[dot.type]||'var(--a)'}"></div>`).join('')}</div>`;
+    }
+    bars.forEach((b,i)=>{
+      const bot=3+i*6;
+      if(b.pos==='s')evHTML+=`<div style="position:absolute;bottom:${bot}px;left:50%;right:0;height:4px;background:${b.color};border-radius:2px 0 0 2px;opacity:.8"></div>`;
+      else if(b.pos==='e')evHTML+=`<div style="position:absolute;bottom:${bot}px;left:0;right:50%;height:4px;background:${b.color};border-radius:0 2px 2px 0;opacity:.8"></div>`;
+      else evHTML+=`<div style="position:absolute;bottom:${bot}px;left:0;right:0;height:4px;background:${b.color};opacity:.8"></div>`;
+    });
+    h+=`<div class="${cls}" onclick="pickDay('${ds}')"><span class="shift-tag" style="color:${SHIFT_CLR[sh]}">${sh}</span><span>${d}</span>${evHTML}</div>`;
   }
-  for(let i=1;i<=42-first-days;i++)h+=`<div class="cal-cell other">${i}</div>`;
+  const nm=_cm+1>11?0:_cm+1,ny=_cm+1>11?_cy+1:_cy;
+  for(let i=1;i<=42-first-days;i++){
+    const nds=`${ny}-${Sp(nm+1)}-${Sp(i)}`;
+    const sh=getShift(nds);
+    h+=`<div class="cal-cell other"><span class="shift-tag" style="color:${SHIFT_CLR[sh]}">${sh}</span><span>${i}</span></div>`;
+  }
   document.getElementById('cal-grid').innerHTML=h;
 }
 function pickDay(ds){_sd=ds;renderCal();renderDay(ds);}
@@ -447,18 +497,20 @@ function openModal(id){
   _eid=id||null;
   document.getElementById('modal-title').textContent=id?'일정 수정':'일정 추가';
   document.getElementById('btn-del').style.display=id?'':'none';
-  if(id&&EVENTS[id]){const e=EVENTS[id];document.getElementById('ev-date').value=e.date;document.getElementById('ev-title').value=e.title;document.getElementById('ev-memo').value=e.memo||'';_stype=e.type;}
-  else{document.getElementById('ev-date').value=_sd||todayStr();document.getElementById('ev-title').value='';document.getElementById('ev-memo').value='';_stype=WHO;}
+  if(id&&EVENTS[id]){const e=EVENTS[id];document.getElementById('ev-date').value=e.date;document.getElementById('ev-edate').value=e.endDate||'';document.getElementById('ev-title').value=e.title;document.getElementById('ev-memo').value=e.memo||'';_stype=e.type;}
+  else{document.getElementById('ev-date').value=_sd||todayStr();document.getElementById('ev-edate').value='';document.getElementById('ev-title').value='';document.getElementById('ev-memo').value='';_stype=WHO;}
   document.querySelectorAll('.type-tab').forEach(t=>{t.classList.remove('active');if(t.dataset.type===_stype)t.classList.add('active');});
   document.getElementById('ev-modal').classList.add('open');
 }
 function closeModal(){document.getElementById('ev-modal').classList.remove('open');_eid=null;}
 function selType(btn){document.querySelectorAll('.type-tab').forEach(t=>t.classList.remove('active'));btn.classList.add('active');_stype=btn.dataset.type;}
 async function saveEvent(){
-  const title=document.getElementById('ev-title').value.trim(),date=document.getElementById('ev-date').value,memo=document.getElementById('ev-memo').value.trim();
+  const title=document.getElementById('ev-title').value.trim(),date=document.getElementById('ev-date').value,memo=document.getElementById('ev-memo').value.trim(),edate=document.getElementById('ev-edate').value;
   if(!title){showToast('제목을 입력해주세요!');return;}if(!date){showToast('날짜를 선택해주세요!');return;}
+  if(edate&&edate<date){showToast('종료날짜가 시작날짜보다 빠를 수 없어요!');return;}
   if(!DB){showToast('Firebase 연결 필요');return;}
   const ev={title,date,type:_stype,memo,createdBy:WHO,updatedAt:Date.now()};
+  if(edate&&edate>date)ev.endDate=edate;
   try{if(_eid){await DB.ref(`${EV_PATH}/${_eid}`).update(ev);showToast('✅ 수정됐어요!');}else{const r=DB.ref(EV_PATH).push();ev.id=r.key;ev.createdAt=Date.now();await r.set(ev);showToast('✅ 추가됐어요!');}closeModal();}catch(e){showToast('저장 실패 😢');}
 }
 async function deleteEvent(){
